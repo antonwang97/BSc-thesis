@@ -1,0 +1,244 @@
+---
+title: "Microtitter analyse"
+output: html_document
+date: "2023-05-14"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library("tidyverse")
+library(readxl)
+
+setwd("C:/Users/hostp/OneDrive/Bsc Projekt")
+```
+Excel filer
+
+```{r}
+library(dplyr)
+micro<- read_excel("Microtitter CEC + C1 & 52.xlsx", skip = 11)
+micro <- micro[-1,]
+micro <- micro[, -1]
+micro <- micro[,-1]
+
+micro <- mutate_at(micro, vars(-0), as.numeric)
+# Generate the sequence of 5-minute intervals
+intervals <- seq(from = 0, to = ((nrow(micro)-1)*5), by = 5)
+
+
+micro2 <- micro %>%
+  mutate(OD_C1 = rowMeans(select(., c(A03:A06, B03:B06, C03:C06, D03:D06, E03:E06, F03:F06, G03:G06, H03:H06)))) %>%
+  mutate(OD_52 = rowMeans(select(., c(A08:A11, B08:B11, C08:C11, D08:D11, E08:E11, F08:F11, G08:G11, H08:H11)))) %>%
+  mutate(OD_CEC = rowMeans(select(., c(A02, B02, C02, D02, E02, F02, G02, H02, A07, B07, C07, D07, E07, F07, G07, H07))))
+
+
+OD_df <- data.frame(Time = intervals, OD_C1 = micro2$OD_C1, OD_52 = micro2$OD_52, OD_CEC = micro2$OD_CEC)
+```
+
+```{r}
+linear_interval <- c(550,675)
+ggplot(OD_df, aes(x=Time)) +
+  geom_point(aes(y=OD_C1, color="blue")) +
+  geom_point(aes(y=OD_52, color="red")) +
+  geom_point(aes(y=OD_CEC, color="yellow")) +
+  scale_color_manual(values=c("blue", "red", "yellow"), labels=c("OD_C1", "OD_E52", "OD_CEC")) +
+  theme_bw() + 
+  geom_vline(xintercept = linear_interval, linetype = "dashed")
+
+```
+```{r}
+linear_interval[1]
+```
+
+```{r}
+
+library(dplyr)
+OD<- read_excel("Microtitter CEC + C1 & 52.xlsx", skip = 11)
+OD <- OD[-1,]
+OD <- OD[, -1]
+OD <- OD[,-1]
+
+OD <- mutate_at(OD, vars(-0), as.numeric)
+head(OD)
+# Generate the sequence of 5-minute intervals
+intervals <- seq(from = 0, to = ((nrow(OD)-1)*5), by = 5)
+
+OD$Time <- intervals
+OD
+
+OD_lphase <- OD %>%
+  select(Time, everything()) %>%
+  filter(Time > linear_interval[1] & Time < linear_interval[2])
+
+
+lm_list <- OD_lphase %>% 
+  select(-Time) %>% 
+  map(.cols = everything(), ~ lm(.x ~ OD_lphase$Time))
+
+slopes <- map_dbl(lm_list, ~coef(.)[[2]])
+
+slopes_df <- data.frame(Slopes = slopes) 
+
+Samples <- data.frame(Sample = names(OD))
+Samples
+
+slopes_df <- Samples %>%
+  filter(Sample != "Time") %>%
+  mutate(Slope = as.numeric(slopes))
+
+
+
+
+slopes_df
+  
+
+C1_slopes <- slopes_df %>%
+  filter(Sample %in% c("A03", "A04", "A05", "A06", "B03", "B04", "B05", "B06",
+                   "C03", "C04", "C05", "C06", "D03", "D04", "D05", "D06",
+                   "E03", "E04", "E05", "E06", "F03", "F04", "F05", "F06",
+                   "G03", "G04", "G05", "G06", "H03", "H04", "H05", "H06")) %>%
+  mutate(Sample = factor(Sample, levels = c("A03", "A04", "A05", "A06", "B03", "B04", "B05", "B06",
+                   "C03", "C04", "C05", "C06", "D03", "D04", "D05", "D06",
+                   "E03", "E04", "E05", "E06", "F03", "F04", "F05", "F06",
+                   "G03", "G04", "G05", "G06", "H03", "H04", "H05", "H06"))) 
+
+C52_slopes <- slopes_df %>%
+    filter(Sample %in% c("A08", "A09", "A10", "A11", "B08", "B09", "B10",
+                         "B11", "C08", "C09", "C10", "C11", "D08", "D09", "D10",
+                         "D11", "E08", "E09", "E10", "E11", "F08", "F09", "F10", 
+                         "F11", "G08", "G09", "G10", "G11", "H08", "H09", "H10", "H11")) %>%
+  mutate(Sample = factor(Sample, levels = c("A08", "A09", "A10", "A11", "B08", "B09", "B10", "B11", "C08",
+                                            "C09", "C10", "C11", "D08", "D09", "D10", "D11", "E08", "E09",
+                                            "E10", "E11", "F08", "F09", "F10", "F11", "G08", "G09", "G10", "G11",
+                                            "H08", "H09", "H10", "H11"))) 
+  
+
+CEC_slopes <- slopes_df %>%
+  filter(Sample %in% c("A02", "B02", "C02", "D02", "E02", "F02", "G02", "H02", "A07", "B07", "C07", "D07", "E07", "F07", "G07", "H07")) %>%
+  mutate(Sample = factor(Sample, levels = c("A02", "B02", "C02", "D02", "E02", "F02", "G02", "H02", "A07", "B07", "C07", "D07", "E07", "F07", "G07", "H07"))) 
+
+C1_slopes
+
+t.test(CEC_slopes$Slope, C1_slopes$Slope)
+
+```
+
+
+```{r}
+t.test(C52_slopes$Slope, CEC_slopes$Slope)
+```
+```{r}
+t.test(C1_slopes$Slope, C52_slopes$Slope)
+```
+
+
+
+
+
+
+## CEC VS C1
+
+```{r}
+# Calculate the confidence intervals for each set of slopes
+ci1 <- t.test(CEC_slopes$Slope)$conf.int
+ci2 <- t.test(C1_slopes$Slope)$conf.int
+
+# Create a data frame with the slope and confidence interval data
+slopes_df <- data.frame(
+  Sample = c(rep("CEC", length(CEC_slopes$Slope)), rep("C1", length(C1_slopes$Slope))),
+  Slope = c(CEC_slopes$Slope, C1_slopes$Slope),
+  CI_Lower = c(rep(ci1[1], length(CEC_slopes$Slope)), rep(ci2[1], length(C1_slopes$Slope))),
+  CI_Upper = c(rep(ci1[2], length(CEC_slopes$Slope)), rep(ci2[2], length(C1_slopes$Slope)))
+)
+
+# Determine if the confidence intervals overlap for each sample
+overlap <- ifelse(ci1[1] <= ci2[2] & ci1[2] >= ci2[1], "Yes", "No")
+
+# Create a box plot
+ggplot(slopes_df, aes(x = Sample, y = Slope, fill = overlap)) +
+  geom_boxplot(position = position_dodge(width = 0.9), outlier.shape = NA) +
+  geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), width = 0.2) +
+  scale_fill_manual(values = c("Yes" = "gray80", "No" = "white")) +
+  labs(fill = "Overlap CI") +
+  theme_classic() +
+  labs(title = "CEC Vs C1")
+
+```
+```{r}
+# Calculate the confidence intervals for each set of slopes
+ci1 <- t.test(CEC_slopes$Slope)$conf.int
+ci2 <- t.test(C52_slopes$Slope)$conf.int
+
+# Create a data frame with the slope and confidence interval data
+slopes_df <- data.frame(
+  Sample = c(rep("CEC", length(CEC_slopes$Slope)), rep("C52", length(C52_slopes$Slope))),
+  Slope = c(CEC_slopes$Slope, C52_slopes$Slope),
+  CI_Lower = c(rep(ci1[1], length(CEC_slopes$Slope)), rep(ci2[1], length(C52_slopes$Slope))),
+  CI_Upper = c(rep(ci1[2], length(CEC_slopes$Slope)), rep(ci2[2], length(C52_slopes$Slope)))
+)
+
+# Determine if the confidence intervals overlap for each sample
+overlap <- ifelse(ci1[1] <= ci2[2] & ci1[2] >= ci2[1], "Yes", "No")
+
+# Create a box plot
+ggplot(slopes_df, aes(x = Sample, y = Slope, fill = overlap)) +
+  geom_boxplot(position = position_dodge(width = 0.9), outlier.shape = NA) +
+  geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), width = 0.2) +
+  scale_fill_manual(values = c("Yes" = "gray80", "No" = "white")) +
+  labs(fill = "Overlap CI") +
+  theme_classic() +
+  labs(title = "CEC vs 52")
+```
+
+```{r}
+# Calculate the confidence intervals for each set of slopes
+ci1 <- t.test(CEC_slopes$Slope)$conf.int
+ci2 <- t.test(C52_slopes$Slope)$conf.int
+
+# Create a data frame with the slope and confidence interval data
+slopes_df <- data.frame(
+  Sample = c(rep("CEC", length(CEC_slopes$Slope)), rep("C52", length(C52_slopes$Slope))),
+  Slope = c(CEC_slopes$Slope, C52_slopes$Slope),
+  CI_Lower = c(rep(ci1[1], length(CEC_slopes$Slope)), rep(ci2[1], length(C52_slopes$Slope))),
+  CI_Upper = c(rep(ci1[2], length(CEC_slopes$Slope)), rep(ci2[2], length(C52_slopes$Slope)))
+)
+
+# Determine if the confidence intervals overlap for each sample
+overlap <- ifelse(ci1[1] <= ci2[2] & ci1[2] >= ci2[1], "Yes", "No")
+
+# Create a box plot
+ggplot(slopes_df, aes(x = Sample, y = Slope, fill = overlap)) +
+  geom_boxplot(position = position_dodge(width = 0.9), outlier.shape = NA) +
+  geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), width = 0.2) +
+  scale_fill_manual(values = c("Yes" = "gray80", "No" = "white")) +
+  labs(fill = "Overlap CI") +
+  theme_classic() +
+  labs(title = "CEC vs 52")
+```
+```{r}
+# Calculate the confidence intervals for each set of slopes
+ci1 <- t.test(C1_slopes$Slope)$conf.int
+ci2 <- t.test(C52_slopes$Slope)$conf.int
+
+# Create a data frame with the slope and confidence interval data
+slopes_df <- data.frame(
+  Sample = c(rep("C1", length(C1_slopes$Slope)), rep("C52", length(C52_slopes$Slope))),
+  Slope = c(C1_slopes$Slope, C52_slopes$Slope),
+  CI_Lower = c(rep(ci1[1], length(C1_slopes$Slope)), rep(ci2[1], length(C52_slopes$Slope))),
+  CI_Upper = c(rep(ci1[2], length(C1_slopes$Slope)), rep(ci2[2], length(C52_slopes$Slope)))
+)
+
+# Determine if the confidence intervals overlap for each sample
+overlap <- ifelse(ci1[1] <= ci2[2] & ci1[2] >= ci2[1], "Yes", "No")
+
+# Create a box plot
+ggplot(slopes_df, aes(x = Sample, y = Slope, fill = overlap)) +
+  geom_boxplot(position = position_dodge(width = 0.9), outlier.shape = NA) +
+  geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), width = 0.2) +
+  scale_fill_manual(values = c("Yes" = "gray80", "No" = "white")) +
+  labs(fill = "Overlap CI") +
+  theme_classic() +
+  labs(title = "C1 vs 52") +
+  geom_hline(yintercept = 0.002337052, linetype="dashed")
+```
+
+
